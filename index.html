@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="theme-color" content="#f8fafc">
+  <meta name="theme-color" content="#fff1f2">
   <title>Unread AI — What Did I Miss?</title>
 
   <!-- CDN assets provide the browser runtime and styling; chat content is processed locally. -->
@@ -19,26 +19,26 @@
       min-width: 320px;
       min-height: 100vh;
       background:
-        radial-gradient(ellipse at 12% -8%, rgba(233, 213, 255, .62), transparent 34rem),
-        radial-gradient(ellipse at 96% 20%, rgba(207, 250, 254, .42), transparent 30rem),
-        #f8fafc;
-      color: #1e293b;
+        radial-gradient(ellipse at 12% -8%, rgba(251, 207, 232, .45), transparent 34rem),
+        radial-gradient(ellipse at 96% 20%, rgba(255, 228, 230, .65), transparent 30rem),
+        #fff1f2;
+      color: #4c1d35;
       font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     }
     button, textarea, input { font: inherit; }
     button:focus-visible, textarea:focus-visible, .drop-zone:focus-within {
-      outline: 2px solid #c084fc;
+      outline: 2px solid #db2777;
       outline-offset: 3px;
     }
     .glass {
-      border: 1px solid #e2e8f0;
+      border: 1px solid #fbcfe8;
       background: rgba(255, 255, 255, .94);
-      box-shadow: 0 14px 38px rgba(148, 163, 184, .14), 0 3px 10px rgba(192, 132, 252, .06);
+      box-shadow: 0 14px 38px rgba(190, 24, 93, .08), 0 3px 10px rgba(251, 207, 232, .18);
     }
     .drop-zone { transition: border-color .2s ease, background .2s ease, transform .2s ease; }
-    .drop-zone.dragging { border-color: #c084fc; background: #faf5ff; transform: scale(1.005); }
+    .drop-zone.dragging { border-color: #db2777; background: #fce7f3; transform: scale(1.005); }
     .primary-button { transition: transform .18s ease, box-shadow .18s ease, background .18s ease; }
-    .primary-button:hover { transform: translateY(-2px); box-shadow: 0 10px 28px rgba(192, 132, 252, .25); }
+    .primary-button:hover { transform: translateY(-2px); box-shadow: 0 10px 28px rgba(190, 24, 93, .2); }
     .urgency-pulse { animation: pulse 1.8s ease-in-out infinite; }
     @keyframes pulse {
       0%, 100% { box-shadow: 0 0 0 0 rgba(190, 18, 60, .2); }
@@ -46,7 +46,7 @@
     }
     .task-checkbox { accent-color: #6366f1; }
     .task-checkbox:checked + span { color: #94a3b8; text-decoration: line-through; }
-    .scrollbar-thin { scrollbar-width: thin; scrollbar-color: #cbd5e1 transparent; }
+    .scrollbar-thin { scrollbar-width: thin; scrollbar-color: #f9a8d4 transparent; }
     @media (prefers-reduced-motion: reduce) {
       *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; transition-duration: .01ms !important; }
     }
@@ -107,11 +107,10 @@
       };
     }
 
-    function Card({ icon, title, className = "", children }) {
+    function Card({ title, className = "", children }) {
       return (
         <section className={`glass rounded-2xl p-5 sm:p-6 ${className}`}>
-          <h2 className="mb-4 flex items-center gap-3 text-base font-semibold text-slate-800">
-            <span className="grid h-9 w-9 place-items-center rounded-xl border border-purple-100 bg-purple-50 text-lg text-violet-700" aria-hidden="true">{icon}</span>
+          <h2 className="mb-4 flex items-center gap-3 text-base font-semibold text-[#9d174d]">
             {title}
           </h2>
           {children}
@@ -213,18 +212,17 @@
 
       return (
         <main className="mx-auto min-h-screen w-full max-w-7xl px-4 py-8 sm:px-6 sm:py-12 lg:px-8">
-          <header className="mx-auto mb-9 max-w-4xl text-center">
-            <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-[#d1fae5] px-4 py-2 text-xs font-semibold tracking-wide text-[#047857] shadow-sm sm:text-sm">
+          <header className="mx-0 mb-9 max-w-4xl text-left">
+            <h1 className="text-xl font-bold tracking-tight text-[#9d174d]">
+              Unread AI — Stop Scrolling, Start Knowing
+            </h1>
+            <p className="mt-2 text-sm leading-6 text-[#be185d]">
+              Turn 200+ chaotic chat messages into a crisp 10-second action plan.
+            </p>
+            <div className="mt-4 inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-[#d1fae5] px-4 py-2 text-xs font-semibold tracking-wide text-[#047857] shadow-sm sm:text-sm">
               <span aria-hidden="true">🔒</span>
               <span>100% On-Device &amp; Private — Zero Data Leaves Your Device</span>
             </div>
-            <p className="mb-3 text-xs font-bold uppercase tracking-[.25em] text-violet-600">Less scrolling. More clarity.</p>
-            <h1 className="text-3xl font-extrabold tracking-tight text-slate-900 sm:text-5xl">
-              ⚡ Unread AI <span className="text-violet-400">—</span> Stop Scrolling, Start Knowing
-            </h1>
-            <p className="mx-auto mt-4 max-w-2xl text-sm leading-6 text-slate-600 sm:text-base">
-              Turn 200+ chaotic chat messages into a crisp 10-second action plan.
-            </p>
           </header>
 
           <section className="glass mx-auto max-w-5xl rounded-3xl p-4 sm:p-7">
@@ -302,12 +300,12 @@
               </div>
 
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                <Card icon="🚦" title="Urgency" className="md:col-span-2">
+                <Card title="Urgency" className="md:col-span-2">
                   <span className={`inline-flex rounded-full px-3 py-1.5 text-xs font-extrabold tracking-wider ${result.urgency === "HIGH URGENCY" ? "urgency-pulse bg-[#fecdd3] text-[#be123c] ring-1 ring-rose-200" : "bg-emerald-100 text-emerald-800 ring-1 ring-emerald-200"}`}>
                     {result.urgency}
                   </span>
                 </Card>
-                <Card icon="💬" title="Executive Summary">
+                <Card title="Executive Summary">
                   <ol className="space-y-3">
                     {result.summary.map((sentence, index) => (
                       <li className="flex gap-3 text-sm leading-6 text-slate-700" key={index}>
@@ -317,13 +315,13 @@
                     ))}
                   </ol>
                 </Card>
-                <Card icon="🎯" title="Action Items" className="[&>h2>span]:border-indigo-200 [&>h2>span]:bg-[#e0e7ff] [&>h2>span]:text-[#4338ca]">
+                <Card title="Action Items">
                   <ItemList items={result.tasks} emptyText="No action items found." checkboxes />
                 </Card>
-                <Card icon="⚡" title="Key Decisions" className="[&>h2>span]:border-green-200 [&>h2>span]:bg-green-100 [&>h2>span]:text-green-700">
+                <Card title="Key Decisions">
                   <ItemList items={result.decisions} emptyText="No decisions found." />
                 </Card>
-                <Card icon="⏰" title="Deadlines & Mentions" className="[&>h2>span]:border-amber-200 [&>h2>span]:bg-yellow-100 [&>h2>span]:text-amber-800">
+                <Card title="Deadlines & Mentions">
                   <div>
                     <h3 className="mb-2 inline-flex rounded-md bg-yellow-100 px-2 py-1 text-xs font-bold uppercase tracking-wider text-amber-800">Deadlines</h3>
                     <ItemList items={result.deadlines} emptyText="No deadline lines found." />
