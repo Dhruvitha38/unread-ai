@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#f8fafc">
+  <title>Unread AI — What Did I Miss?</title>
+
+  <!-- CDN assets provide the browser runtime and styling; chat content is processed locally. -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    :root { color-scheme: light; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-width: 320px;
+      min-height: 100vh;
+      background:
+        radial-gradient(ellipse at 12% -8%, rgba(233, 213, 255, .62), transparent 34rem),
+        radial-gradient(ellipse at 96% 20%, rgba(207, 250, 254, .42), transparent 30rem),
+        #f8fafc;
+      color: #1e293b;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    button, textarea, input { font: inherit; }
+    button:focus-visible, textarea:focus-visible, .drop-zone:focus-within {
+      outline: 2px solid #c084fc;
+      outline-offset: 3px;
+    }
+    .glass {
+      border: 1px solid #e2e8f0;
+      background: rgba(255, 255, 255, .94);
+      box-shadow: 0 14px 38px rgba(148, 163, 184, .14), 0 3px 10px rgba(192, 132, 252, .06);
+    }
+    .drop-zone { transition: border-color .2s ease, background .2s ease, transform .2s ease; }
+    .drop-zone.dragging { border-color: #c084fc; background: #faf5ff; transform: scale(1.005); }
+    .primary-button { transition: transform .18s ease, box-shadow .18s ease, background .18s ease; }
+    .primary-button:hover { transform: translateY(-2px); box-shadow: 0 10px 28px rgba(192, 132, 252, .25); }
+    .urgency-pulse { animation: pulse 1.8s ease-in-out infinite; }
+    @keyframes pulse {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(190, 18, 60, .2); }
+      50% { box-shadow: 0 0 0 7px rgba(190, 18, 60, 0); }
+    }
+    .task-checkbox { accent-color: #6366f1; }
+    .task-checkbox:checked + span { color: #94a3b8; text-decoration: line-through; }
+    .scrollbar-thin { scrollbar-width: thin; scrollbar-color: #cbd5e1 transparent; }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; transition-duration: .01ms !important; }
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+    const { useMemo, useRef, useState } = React;
+
+    const SAMPLE_CHAT = `[09:12] Maya: Morning team — we need to lock the launch checklist today.
+[09:14] Alex: The checkout bug is critical. Please fix it before 5 PM so QA has time to retest.
+[09:17] Priya: I tested the new onboarding flow and it looks good. We agreed to ship the shorter version.
+[09:19] Maya: @Jordan please assign someone to update the help docs by EOD.
+[09:22] Jordan: I can take the docs. Todo: add the refund steps and share a draft by 4 PM.
+[09:25] Alex: The analytics event is still missing. Can someone fix it ASAP?
+[09:28] Priya: Approved — let's use the blue header and keep the launch date for Friday.
+[09:31] Maya: @Alex please post the final QA results today. Flag anything urgent here.`;
+
+    const TASK_RE = /\b(?:need\s+to|please|todo|assign|fix)\b/i;
+    const DECISION_RE = /\b(?:agreed|decided|approved|chose)\b/i;
+    const URGENCY_RE = /\b(?:urgent|asap|critical)\b/i;
+    const DEADLINE_RE = /\b(?:by|today|tonight|eod|tomorrow|\d{1,2}(?::\d{2})?\s?(?:a\.?m\.?|p\.?m\.?))\b/i;
+
+    function cleanMessage(line) {
+      return line
+        .replace(/^\s*(?:\[[^\]]+\]\s*)?/, "")
+        .replace(/^[^:]{1,40}:\s*/, "")
+        .trim();
+    }
+
+    function analyzeChat(rawText) {
+      const lines = [...new Set(rawText.split(/\r?\n/).map((line) => line.trim()).filter(Boolean))];
+      const normalized = lines.join("\n");
+      const sentences = lines
+        .flatMap((line) => cleanMessage(line).split(/(?<=[.!?])\s+/))
+        .map((sentence) => sentence.trim())
+        .filter(Boolean);
+      const taskLines = lines.filter((line) => TASK_RE.test(line));
+      const deadlineLines = lines.filter((line) => DEADLINE_RE.test(line));
+      const decisionLines = lines.filter((line) => DECISION_RE.test(line));
+      const urgency = URGENCY_RE.test(normalized);
+      const mentionTags = [...new Set(normalized.match(/@[a-zA-Z0-9_]+/g) || [])];
+
+      let summary = sentences.slice(0, 2);
+      if (summary.length < 2) {
+        const overview = `Found ${taskLines.length} potential action item${taskLines.length === 1 ? "" : "s"}, ${decisionLines.length} decision${decisionLines.length === 1 ? "" : "s"}, and ${deadlineLines.length} deadline-related message${deadlineLines.length === 1 ? "" : "s"}.`;
+        summary.push(overview);
+      }
+
+      return {
+        urgency: urgency ? "HIGH URGENCY" : "NORMAL PRIORITY",
+        summary: summary.slice(0, 2),
+        tasks: taskLines,
+        decisions: decisionLines,
+        deadlines: deadlineLines,
+        mentions: mentionTags,
+      };
+    }
+
+    function Card({ icon, title, className = "", children }) {
+      return (
+        <section className={`glass rounded-2xl p-5 sm:p-6 ${className}`}>
+          <h2 className="mb-4 flex items-center gap-3 text-base font-semibold text-slate-800">
+            <span className="grid h-9 w-9 place-items-center rounded-xl border border-purple-100 bg-purple-50 text-lg text-violet-700" aria-hidden="true">{icon}</span>
+            {title}
+          </h2>
+          {children}
+        </section>
+      );
+    }
+
+    function ItemList({ items, emptyText, checkboxes = false }) {
+      if (!items.length) return <p className="text-sm text-slate-500">{emptyText}</p>;
+      return (
+        <ul className="scrollbar-thin max-h-72 space-y-3 overflow-y-auto pr-1">
+          {items.map((item, index) => (
+            <li className="break-words text-sm leading-6 text-slate-700" key={`${item}-${index}`}>
+              {checkboxes ? (
+                <label className="flex cursor-pointer items-start gap-3">
+                  <input className="task-checkbox mt-1 h-4 w-4 shrink-0" type="checkbox" />
+                  <span>{cleanMessage(item)}</span>
+                </label>
+              ) : cleanMessage(item)}
+            </li>
+          ))}
+        </ul>
+      );
+    }
+
+    function App() {
+      const [chatText, setChatText] = useState(SAMPLE_CHAT);
+      const [result, setResult] = useState(null);
+      const [error, setError] = useState("");
+      const [isDragging, setIsDragging] = useState(false);
+      const fileInputRef = useRef(null);
+
+      const downloadText = useMemo(() => {
+        if (!result) return "";
+        return [
+          "⚡ UNREAD AI — WHAT DID I MISS?",
+          "",
+          `Urgency: ${result.urgency}`,
+          "",
+          "Executive Summary",
+          ...result.summary.map((sentence) => `- ${sentence}`),
+          "",
+          "Action Items",
+          ...(result.tasks.length ? result.tasks.map((task) => `- [ ] ${cleanMessage(task)}`) : ["- None found"]),
+          "",
+          "Key Decisions",
+          ...(result.decisions.length ? result.decisions.map((item) => `- ${cleanMessage(item)}`) : ["- None found"]),
+          "",
+          "Deadlines",
+          ...(result.deadlines.length ? result.deadlines.map((item) => `- ${cleanMessage(item)}`) : ["- None found"]),
+          "",
+          "Mentions",
+          ...(result.mentions.length ? result.mentions.map((mention) => `- ${mention}`) : ["- None found"]),
+        ].join("\n");
+      }, [result]);
+
+      function readFile(file) {
+        if (!file) return;
+        if (!file.name.toLowerCase().endsWith(".txt") && file.type !== "text/plain") {
+          setError("Please choose a .txt chat export.");
+          return;
+        }
+        const reader = new FileReader();
+        reader.onload = () => {
+          setChatText(String(reader.result || ""));
+          setResult(null);
+          setError("");
+        };
+        reader.onerror = () => setError("The selected file could not be read. Please try another .txt file.");
+        reader.readAsText(file);
+      }
+
+      function handleAnalyze() {
+        if (!chatText.trim()) {
+          setError("Paste a chat or upload a .txt file before analyzing.");
+          setResult(null);
+          return;
+        }
+        setError("");
+        setResult(analyzeChat(chatText));
+      }
+
+      function handleDownload() {
+        if (!downloadText) return;
+        const blob = new Blob([downloadText], { type: "text/plain;charset=utf-8" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = "unread-ai-summary.txt";
+        link.click();
+        URL.revokeObjectURL(url);
+      }
+
+      function onDrop(event) {
+        event.preventDefault();
+        setIsDragging(false);
+        readFile(event.dataTransfer.files?.[0]);
+      }
+
+      return (
+        <main className="mx-auto min-h-screen w-full max-w-7xl px-4 py-8 sm:px-6 sm:py-12 lg:px-8">
+          <header className="mx-auto mb-9 max-w-4xl text-center">
+            <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-[#d1fae5] px-4 py-2 text-xs font-semibold tracking-wide text-[#047857] shadow-sm sm:text-sm">
+              <span aria-hidden="true">🔒</span>
+              <span>100% On-Device &amp; Private — Zero Data Leaves Your Device</span>
+            </div>
+            <p className="mb-3 text-xs font-bold uppercase tracking-[.25em] text-violet-600">Less scrolling. More clarity.</p>
+            <h1 className="text-3xl font-extrabold tracking-tight text-slate-900 sm:text-5xl">
+              ⚡ Unread AI <span className="text-violet-400">—</span> Stop Scrolling, Start Knowing
+            </h1>
+            <p className="mx-auto mt-4 max-w-2xl text-sm leading-6 text-slate-600 sm:text-base">
+              Turn 200+ chaotic chat messages into a crisp 10-second action plan.
+            </p>
+          </header>
+
+          <section className="glass mx-auto max-w-5xl rounded-3xl p-4 sm:p-7">
+            <div
+              className={`drop-zone mb-5 rounded-2xl border border-dashed p-6 text-center sm:p-8 ${isDragging ? "dragging" : "border-slate-300 bg-slate-50/80"}`}
+              onDragEnter={(event) => { event.preventDefault(); setIsDragging(true); }}
+              onDragOver={(event) => event.preventDefault()}
+              onDragLeave={(event) => {
+                if (!event.currentTarget.contains(event.relatedTarget)) setIsDragging(false);
+              }}
+              onDrop={onDrop}
+            >
+              <input
+                ref={fileInputRef}
+                className="sr-only"
+                type="file"
+                accept=".txt,text/plain"
+                onChange={(event) => {
+                  readFile(event.target.files?.[0]);
+                  event.target.value = "";
+                }}
+                aria-label="Choose a chat text file"
+              />
+              <div className="mx-auto mb-3 grid h-12 w-12 place-items-center rounded-2xl bg-purple-100 text-2xl" aria-hidden="true">📄</div>
+              <p className="font-semibold text-slate-800">Drop your chat export here</p>
+              <p className="mt-1 text-sm text-slate-500">TXT files only · Your file is read locally in this browser</p>
+              <button
+                className="mt-4 rounded-lg border border-purple-200 bg-white px-4 py-2 text-sm font-semibold text-violet-700 shadow-sm transition hover:bg-purple-50"
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+              >
+                Browse .txt file
+              </button>
+            </div>
+
+            <label className="mb-2 block text-sm font-semibold text-slate-800" htmlFor="chat-text">Or paste chat messages</label>
+            <textarea
+              id="chat-text"
+              className="scrollbar-thin min-h-56 w-full resize-y rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm leading-6 text-slate-700 placeholder:text-slate-400 shadow-inner shadow-slate-100"
+              value={chatText}
+              onChange={(event) => {
+                setChatText(event.target.value);
+                setResult(null);
+                setError("");
+              }}
+              placeholder="Paste messages from WhatsApp, Slack, Discord, or another chat..."
+            />
+            {error && <p className="mt-3 text-sm text-rose-700" role="alert">{error}</p>}
+            <div className="mt-4 flex flex-col items-center justify-between gap-3 sm:flex-row">
+              <p className="text-xs text-slate-500">No chat content is uploaded or sent to a server.</p>
+              <button
+                className="primary-button inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-violet-500 to-indigo-500 px-6 font-bold text-white shadow-lg shadow-violet-200/70 sm:w-auto"
+                type="button"
+                onClick={handleAnalyze}
+              >
+                <span aria-hidden="true">✦</span> Analyze Chat
+              </button>
+            </div>
+          </section>
+
+          {result && (
+            <section className="mx-auto mt-9 max-w-5xl" aria-live="polite" aria-labelledby="results-title">
+              <div className="mb-4 flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
+                <div>
+                  <p className="mb-1 text-xs font-bold uppercase tracking-[.2em] text-violet-600">Your quick catch-up</p>
+                  <h2 id="results-title" className="text-2xl font-bold text-slate-900">Here&apos;s what you missed</h2>
+                </div>
+                <button
+                  className="rounded-xl border border-violet-200 bg-purple-50 px-4 py-2.5 text-sm font-semibold text-violet-700 transition hover:-translate-y-0.5 hover:bg-purple-100 hover:shadow-md hover:shadow-purple-100"
+                  type="button"
+                  onClick={handleDownload}
+                >
+                  ↓ &nbsp;Download Summary
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <Card icon="🚦" title="Urgency" className="md:col-span-2">
+                  <span className={`inline-flex rounded-full px-3 py-1.5 text-xs font-extrabold tracking-wider ${result.urgency === "HIGH URGENCY" ? "urgency-pulse bg-[#fecdd3] text-[#be123c] ring-1 ring-rose-200" : "bg-emerald-100 text-emerald-800 ring-1 ring-emerald-200"}`}>
+                    {result.urgency}
+                  </span>
+                </Card>
+                <Card icon="💬" title="Executive Summary">
+                  <ol className="space-y-3">
+                    {result.summary.map((sentence, index) => (
+                      <li className="flex gap-3 text-sm leading-6 text-slate-700" key={index}>
+                        <span className="mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full bg-purple-100 text-[11px] font-bold text-violet-700">{index + 1}</span>
+                        <span>{sentence}</span>
+                      </li>
+                    ))}
+                  </ol>
+                </Card>
+                <Card icon="🎯" title="Action Items" className="[&>h2>span]:border-indigo-200 [&>h2>span]:bg-[#e0e7ff] [&>h2>span]:text-[#4338ca]">
+                  <ItemList items={result.tasks} emptyText="No action items found." checkboxes />
+                </Card>
+                <Card icon="⚡" title="Key Decisions" className="[&>h2>span]:border-green-200 [&>h2>span]:bg-green-100 [&>h2>span]:text-green-700">
+                  <ItemList items={result.decisions} emptyText="No decisions found." />
+                </Card>
+                <Card icon="⏰" title="Deadlines & Mentions" className="[&>h2>span]:border-amber-200 [&>h2>span]:bg-yellow-100 [&>h2>span]:text-amber-800">
+                  <div>
+                    <h3 className="mb-2 inline-flex rounded-md bg-yellow-100 px-2 py-1 text-xs font-bold uppercase tracking-wider text-amber-800">Deadlines</h3>
+                    <ItemList items={result.deadlines} emptyText="No deadline lines found." />
+                  </div>
+                  <div className="mt-5 border-t border-slate-100 pt-4">
+                    <h3 className="mb-2 inline-flex rounded-md bg-cyan-100 px-2 py-1 text-xs font-bold uppercase tracking-wider text-cyan-800">Direct mentions</h3>
+                    {result.mentions.length ? (
+                      <div className="flex flex-wrap gap-2">
+                        {result.mentions.map((mention) => (
+                          <span className="rounded-lg border border-cyan-200 bg-[#cffaff] px-2.5 py-1 text-sm font-medium text-cyan-800" key={mention}>{mention}</span>
+                        ))}
+                      </div>
+                    ) : <p className="text-sm text-slate-500">No direct mentions found.</p>}
+                  </div>
+                </Card>
+              </div>
+              <p className="mt-5 text-center text-xs text-slate-500">Local keyword-based analysis can miss context. Double-check important details in the original chat.</p>
+            </section>
+          )}
+
+          <footer className="mx-auto mt-10 max-w-5xl text-center text-xs text-slate-500">
+            Built for clearer conversations · Chat text is processed on your device
+          </footer>
+        </main>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+  </script>
+</body>
+</html>
